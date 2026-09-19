@@ -1,0 +1,36 @@
+{
+  "name": "sitemap-scout-web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "A public sitemap health checker for PHP shared hosting",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3003 --strictPort",
+    "build": "tsc -b && node scripts/clean-assets.mjs && vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "package": "python3 scripts/package.py",
+    "format": "prettier --write \"frontend/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"*.{ts,json}\""
+  },
+  "dependencies": {
+    "lucide-react": "1.31.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "prettier": "3.8.3",
+    "typescript": "5.9.3",
+    "vite": "8.0.13",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

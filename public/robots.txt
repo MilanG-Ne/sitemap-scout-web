@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api.php
+
+Sitemap: https://scout.ivig.dev/sitemap.xml
