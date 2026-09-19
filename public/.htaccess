@@ -6,8 +6,8 @@ LimitRequestBody 8192
     RewriteEngine On
     RewriteCond %{REQUEST_METHOD} !^(GET|POST)$
     RewriteRule ^api\.php$ - [R=405,L]
-    # Numeric Content-Length > 8192, including zero-padded values. This also
-    # works on hosts that do not enforce LimitRequestBody for JSON requests.
+    # Numeric Content-Length > 8192, including zero-padded values. Early
+    # enforcement depends on the host exposing this header to mod_rewrite.
     RewriteCond %{HTTP:Content-Length} ^0*([1-9][0-9]{4,}|9[0-9]{3}|8[3-9][0-9]{2}|82[0-9]{2}|819[3-9])$
     RewriteRule ^api\.php$ - [R=413,L]
 </IfModule>
