@@ -17,7 +17,7 @@ The dashboard includes filters, URL/title search, keyboard-accessible detail dia
 
 ## Why this architecture
 
-React and TypeScript handle the interface; a dependency-free PHP 8.2+ API performs the network requests. A scan advances through short browser-driven requests, with at most one outbound fetch in each step. It fits ordinary shared hosting without a queue worker, database, Node server, external API, or cron job. Keep the browser tab open during a scan.
+React and TypeScript handle the interface; a PHP 8.2+ API performs the network requests. A scan advances through short browser-driven requests, with at most one outbound fetch in each step. It fits ordinary shared hosting without a queue worker, database, Node server, external API, or cron job. Keep the browser tab open during a scan.
 
 The parsing and URL handling started from [Sitemap Scout v0.1.0](https://github.com/MilanG-Ne/sitemap-scout/tree/v0.1.0), also MIT licensed. This web edition adds a stricter network boundary, bounded private jobs, anonymous quotas, HTML inspection, and the interactive report.
 
@@ -72,7 +72,11 @@ Browser tests use isolated API responses; the PHP suite tests actual engine/API/
 | Maximum scan duration | 15 minutes |
 | Report access | Expires one hour after creation |
 
-Quotas use UTC calendar hours/days, not rolling windows. Inactive scan slots expire after 60 seconds. Completed/expired files are cleaned up opportunistically on later scan activity, so expired files can remain on an idle server until the next scan. Limits live in `backend/src/Limits.php`.
+Additional abuse limits: one active scan per visitor network and per target hostname; three scans per target hostname per hour and ten per day; eight challenge/create attempts per visitor per minute and sixty globally per minute. IPv6 addresses share a /64 visitor bucket. Request bodies are capped at 8 KiB. Server-side step pacing is at least one second. Process-held locks cap actual DNS/fetch work at three operations and serialize requests to the same destination IP (a bounded hash pool may conservatively serialize other IPs too).
+
+Status requests, rejected preflight checks, and completed report reads do not write to storage. Invalid scan tokens are rejected before taking job locks. Storage contention fails quickly instead of queuing PHP workers. Terminal jobs discard pending raw URLs immediately. Scan tokens are bound to the visitor network; switching networks requires starting over.
+
+Quotas use UTC calendar hours/days and minutes, not rolling windows. Inactive scan slots expire after 60 seconds. Completed/expired files are cleaned up opportunistically on later scan activity, so expired files can remain on an idle server until the next scan. Limits live in `backend/src/Limits.php`.
 
 A result describes one HTTP request, not search-engine indexing. No JavaScript is executed on scanned pages. Canonicals and robots signals are read from the HTML response; `robots.txt` rules, rendered metadata, hreflang, and full-site crawling are outside this version's scope. Metadata beyond the byte limit may be missing. Cross-origin sitemap entries (including a different scheme, port, or `www` host) are skipped and reported. Use the final sitemap origin to avoid these exclusions.
 
@@ -80,10 +84,14 @@ A result describes one HTTP request, not search-engine indexing. No JavaScript i
 
 Only submit public URLs. Query values are hidden in returned reports, but full submitted URLs are held temporarily in private server-side scan state so requests can be made. URL paths and page titles remain visible; redaction is not a guarantee that arbitrary website content contains no sensitive information. The operator's normal hosting logs and backups have their own retention.
 
-Reports require an unguessable scan ID and a separate bearer token. Tokens stay in browser memory, are not written to browser storage or report files, and only token hashes are stored on the server. The quota ledger stores keyed IP hashes rather than raw addresses. There are no accounts, analytics scripts, cookies, paid API integrations, or automatic report sharing.
+Reports require an unguessable scan ID and a separate bearer token. Tokens stay in browser memory, are not written to browser storage or report files, and only token hashes are stored on the server. The quota ledger stores keyed visitor-network and target-host hashes rather than raw addresses. There are no accounts, analytics scripts, cookies, paid API integrations, or automatic report sharing.
+
+Before creating a scan, the browser solves a short self-hosted [ALTCHA](https://altcha.org/) proof-of-work challenge. The server verifies its signature, two-minute expiry, client and sitemap binding, and single-use replay key. This raises automation cost; it does **not** establish human identity or website ownership. All computation and verification stay between the visitor and this installation.
 
 The public API validates and pins public DNS addresses, blocks local/reserved networks, restricts ports, verifies TLS, bounds responses, and does not forward user headers or cookies. Same-origin POST validation is an additional browser safeguard; it is not authentication and does not prevent a determined bot. Quotas bound outbound scans, not total inbound traffic. Existing hosting CPU, bandwidth, and account limits still apply. Disable new API work by setting `enabled` to `false` in `config.php`.
 
 See [SECURITY.md](SECURITY.md) for the threat boundary and reporting process. Contributions are welcome through issues and pull requests; include a regression test when changing the parser, network guards, or job state machine.
+
+The official MIT-licensed ALTCHA PHP library v2.1.0 is vendored under `backend/vendor/altcha/` so deployment does not need Composer. `UPSTREAM.json` records its pinned upstream commit and every file checksum. The browser solver uses pinned `altcha-lib` 2.5.0. Run `python3 scripts/verify-vendor.py` to check the vendored files. No challenge bypass is provided in production configuration.
 
 MIT licensed.

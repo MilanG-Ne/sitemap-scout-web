@@ -16,6 +16,7 @@ jobs:
           extensions: curl, dom, filter, json, zlib
           coverage: none
       - run: find backend public -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: python3 scripts/verify-vendor.py
       - run: php backend/tests/run.php
   frontend:
     runs-on: ubuntu-latest

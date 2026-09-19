@@ -24,3 +24,15 @@ To roll back, restore that previous code/assets backup and keep the private conf
 - Jobs expire for API access after one hour; cleanup happens on subsequent scan/step activity. For strict disk deletion on idle hosts, add your own retention job outside the public directory after reviewing provider backup policy.
 - Calendar quotas and active scan leases are durable files protected by locks. Don't delete the ledger or rotate its secret casually, as this resets anonymous quotas.
 - If the API returns 503, check PHP extensions, origin configuration, filesystem permissions, and available disk space. Production responses intentionally omit filesystem paths and raw exception messages.
+
+## Security upgrade from 0.1.x
+
+Deploy backend, vendored verifier, API entry point, and built frontend together during a short API maintenance window. Existing 0.1.x jobs intentionally become inaccessible because they lack the new network binding; ask users to start a new scan. Preserve the existing `.secret` and quota ledger so an update does not reset the daily allowance. No new configuration key, service account, CAPTCHA secret, or paid integration is required.
+
+Do not omit `backend/vendor/altcha/` from the release. The archive includes it and its license. Copy the new `.htaccess` body while retaining provider-generated handlers. Check `LimitRequestBody 8192` and API method restrictions on the actual hosting server; they are not enforced by PHP's development server. The CSP remains restricted to this origin; the browser solver needs no external script, iframe, inline code, or WASM permission.
+
+During smoke testing, confirm that `status` does not change the quota ledger and `create` without proof returns 403. A legitimate scan must solve a challenge and finish successfully. Replaying its proof must not create another job. Avoid load tests on shared hosting.
+
+### Provider protection to request
+
+If the hosting account does not expose a per-domain firewall or request-throttling control, ask the provider to apply one specifically to this subdomain. Suggested starting policy: rate-limit `POST /api.php?action=challenge` and `create` before PHP, allow paced `step`/`cancel` calls (roughly one per second for one scan), and limit excessive concurrent connections. Confirm the policy does not change the main site's rules. Review shared-account CPU, entry-process, bandwidth, and billing limits with the provider. The application cannot configure root-level network filtering from a shared-hosting account.
