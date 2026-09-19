@@ -25,6 +25,7 @@ export function App() {
     scan,
     busy,
     stopping,
+    verifying,
     error,
     available,
     run,
@@ -198,11 +199,13 @@ export function App() {
               <strong>
                 {stopping
                   ? "Stopping after the current request…"
-                  : scan.demo
-                    ? "Starting scan…"
-                    : scan.phase === "discovering"
-                      ? "Reading your sitemaps…"
-                      : `Checking URL ${Math.min(scan.checked + 1, Math.min(scan.discovered, scan.limit))} of ${Math.min(scan.discovered, scan.limit)}`}
+                  : verifying
+                    ? "Verifying your browser…"
+                    : scan.demo
+                      ? "Starting scan…"
+                      : scan.phase === "discovering"
+                        ? "Reading your sitemaps…"
+                        : `Checking URL ${Math.min(scan.checked + 1, Math.min(scan.discovered, scan.limit))} of ${Math.min(scan.discovered, scan.limit)}`}
               </strong>
               <p>
                 Keep this tab open. Requests are paced to be considerate to your
@@ -482,18 +485,22 @@ export function App() {
           <p>
             Use public URLs only. Scans check up to 25 URLs across 3 sitemap
             documents. The public tool allows 5 scans per IP per hour, 20 per
-            day, and 150 per day overall.
+            day, and 150 per day overall. Each website is limited to 3 scans per
+            hour and 10 per day. Only one scan per visitor and website can run
+            at a time. IPv6 limits apply per network.
           </p>
           <p>
             Query values are hidden in reports. Full URLs are temporarily stored
             on our server to perform the scan; URL paths and page titles remain
-            visible in results. Reports require a private access token and
-            expire after one hour. Expired files are removed on later scan
-            activity. Hosting logs and backups may have separate retention.
+            visible in results. Reports require a private access token from the
+            same visitor network and expire after one hour. Expired files are
+            removed on later scan activity. Hosting logs and backups may have
+            separate retention.
           </p>
           <p>
-            No accounts, analytics, cookies, or paid API integrations. Download
-            your report before closing this tab. Please scan websites
+            A self-hosted ALTCHA browser check adds friction for automated
+            scans. No accounts, analytics, cookies, or paid API integrations.
+            Download your report before closing this tab. Please scan websites
             responsibly.
           </p>
         </details>

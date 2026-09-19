@@ -25,7 +25,7 @@ final class CurlTransport
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_ENCODING => '',
-            CURLOPT_USERAGENT => 'SitemapScoutWeb/0.1 (+https://scout.ivig.dev/)',
+            CURLOPT_USERAGENT => 'SitemapScoutWeb/0.2 (+https://scout.ivig.dev/)',
             CURLOPT_HTTPHEADER => ['Accept: text/html,application/xml,text/xml,*/*;q=0.1'],
             CURLOPT_HEADERFUNCTION => static function ($curl, string $line) use (&$headers, &$headerBytes): int {
                 $headerBytes += strlen($line);

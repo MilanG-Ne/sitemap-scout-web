@@ -8,6 +8,8 @@ root = Path(__file__).resolve().parents[1]
 if not (root / 'public/index.html').is_file():
     raise SystemExit('Run pnpm build first.')
 files = sorted((root / 'backend/src').rglob('*.php'))
+files += sorted((root / 'backend/vendor/altcha/src').rglob('*.php'))
+files += [root / 'backend/vendor/altcha' / name for name in ('LICENSE.txt', 'composer.json', 'UPSTREAM.json')]
 files += [root / 'public' / name for name in ('index.html', 'api.php', '.htaccess', 'favicon.svg', 'robots.txt', 'sitemap.xml')]
 files += sorted((root / 'public/assets').glob('*'))
 files += [root / name for name in ('config.example.php', 'LICENSE', 'README.md')]

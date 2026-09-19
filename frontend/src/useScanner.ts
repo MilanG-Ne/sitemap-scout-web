@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Scan } from "./types";
 import { demo } from "./demo";
+import { solveChallenge, type Challenge } from "altcha-lib";
+import { deriveKey } from "altcha-lib/algorithms/web/pbkdf2";
 
 const pause = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -12,11 +14,11 @@ class ApiFailure extends Error {
     super(message);
   }
 }
-async function request(
+async function request<T = { scan: Scan; token?: string }>(
   action: string,
   body: object,
   token?: string,
-): Promise<{ scan: Scan; token?: string }> {
+): Promise<T> {
   const response = await fetch(`/api.php?action=${action}`, {
     method: "POST",
     headers: {
@@ -38,6 +40,8 @@ export function useScanner() {
   const [scan, setScan] = useState<Scan>(demo);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const verification = useRef<AbortController | null>(null);
   const [error, setError] = useState("");
   const [available, setAvailable] = useState<boolean | null>(null);
   const active = useRef(false);
@@ -56,6 +60,7 @@ export function useScanner() {
       mounted.current = false;
       stop.current = true;
       controller.abort();
+      verification.current?.abort();
     };
   }, []);
   async function run(sitemap: string) {
@@ -67,16 +72,35 @@ export function useScanner() {
     setError("");
     let current: Scan | undefined;
     try {
-      const created = await request("create", { sitemap });
+      setVerifying(true);
+      const controller = new AbortController();
+      verification.current = controller;
+      const { challenge } = await request<{ challenge: Challenge }>(
+        "challenge",
+        { sitemap },
+      );
+      if (stop.current) return;
+      const solution = await solveChallenge({
+        challenge,
+        deriveKey,
+        controller,
+        timeout: 30000,
+      });
+      if (stop.current) return;
+      if (!solution)
+        throw new Error("Browser verification timed out. Please try again.");
+      const proof = btoa(JSON.stringify({ challenge, solution }));
+      setVerifying(false);
+      const created = await request("create", { sitemap, proof });
       current = created.scan;
       const token = created.token;
       if (!token) throw new Error("The server did not start a scan.");
       if (mounted.current) setScan(current);
       let conflicts = 0;
       while (current.phase === "discovering" || current.phase === "checking") {
-        await pause(550);
+        await pause(1100);
         try {
-          const next = await request(
+          const next: { scan: Scan; token?: string } = await request(
             stop.current ? "cancel" : "step",
             { id: current.id },
             token,
@@ -112,12 +136,14 @@ export function useScanner() {
       active.current = false;
       if (mounted.current) {
         setBusy(false);
+        setVerifying(false);
         setStopping(false);
       }
     }
   }
   function cancel() {
     stop.current = true;
+    verification.current?.abort();
     setStopping(true);
   }
   function loadDemo() {
@@ -125,5 +151,15 @@ export function useScanner() {
     setScan(demo);
     setError("");
   }
-  return { scan, busy, stopping, error, available, run, cancel, loadDemo };
+  return {
+    scan,
+    busy,
+    stopping,
+    verifying,
+    error,
+    available,
+    run,
+    cancel,
+    loadDemo,
+  };
 }

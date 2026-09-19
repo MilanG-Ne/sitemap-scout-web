@@ -1,6 +1,6 @@
 {
   "name": "sitemap-scout-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "A public sitemap health checker for PHP shared hosting",
@@ -14,6 +14,7 @@
     "format": "prettier --write \"frontend/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"*.{ts,json}\""
   },
   "dependencies": {
+    "altcha-lib": "2.5.0",
     "lucide-react": "1.31.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"

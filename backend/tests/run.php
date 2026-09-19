@@ -43,6 +43,15 @@ function temporary(callable $run): void {
 }
 function cancelState(array $s): array { $s['phase'] = 'cancelled'; $s['complete'] = false; return $s; }
 
+function solveProof(array $challenge): string {
+    $c = \AltchaOrg\Altcha\Challenge::fromArray($challenge);
+    $solution = (new \AltchaOrg\Altcha\Altcha())->solveChallenge(new \AltchaOrg\Altcha\SolveChallengeOptions(
+        algorithm: new \AltchaOrg\Altcha\Algorithm\Pbkdf2(), challenge: $c, timeout: 10,
+    ));
+    if ($solution === null) throw new RuntimeException('Could not solve test challenge');
+    return (new \AltchaOrg\Altcha\Payload($c, $solution))->toBase64();
+}
+
 foreach (['127.0.0.1','10.1.2.3','169.254.169.254','172.31.255.255','192.168.1.1','100.64.0.1','0.0.0.0','192.0.2.1','198.18.0.1','198.51.100.2','203.0.113.2','224.1.2.3','255.255.255.255','::1','::ffff:127.0.0.1','fc00::1','fe80::1','2001:db8::1','2002:7f00:1::','3fff::1'] as $ip) test("blocks $ip", fn () => same(false, PublicNetwork::isPublicIp($ip)));
 foreach (['1.1.1.1','8.8.8.8','77.237.235.52','2606:4700:4700::1111','2001:4860:4860::8888'] as $ip) test("accepts public $ip", fn () => same(true, PublicNetwork::isPublicIp($ip)));
 foreach (['http://127.0.0.1/','http://[::1]/','http://2130706433/','http://site.local/','https://example.com:8080/','ftp://example.com/','https://user:pass@example.com/','https://example.com/#fragment',"https://example.com/\r\nx:1"] as $url) test('rejects unsafe URL ' . json_encode($url), fn () => raises(fn () => PublicNetwork::validateUrl($url)));
@@ -97,23 +106,23 @@ test('tokens, concurrency, expiry and private state', fn () => temporary(functio
     $store = new JobStore($dir); $created = $store->create((new ScanEngine(new FakeHttp()))->create('https://example.com/map.xml?key=private'), '203.0.113.10');
     $id = $created['scan']['id']; $token = $created['token'];
     same(false, str_contains(json_encode($created['scan']), 'private')); same(false, isset($created['scan']['tokenHash'])); same(false, isset($created['scan']['queue']));
-    raises(fn () => $store->update($id, str_repeat('0', 64), 'cancelState'), 404);
+    raises(fn () => $store->update($id, str_repeat('0', 64), 'cancelState', '203.0.113.10'), 404);
     $lock = fopen("$dir/$id.lock", 'c'); flock($lock, LOCK_EX);
-    raises(fn () => $store->update($id, $token, 'cancelState'), 409); fclose($lock);
-    $store->update($id, $token, fn ($s) => $s);
-    raises(fn () => $store->update($id, $token, fn ($s) => $s), 409);
+    raises(fn () => $store->update($id, $token, 'cancelState', '203.0.113.10'), 409); fclose($lock);
+    $store->update($id, $token, fn ($s) => $s, '203.0.113.10');
+    raises(fn () => $store->update($id, $token, fn ($s) => $s, '203.0.113.10'), 409);
     $state = json_decode(file_get_contents("$dir/$id.json"), true); $state['expires'] = time() - 1;
-    file_put_contents("$dir/$id.json", json_encode($state)); raises(fn () => $store->update($id, $token, 'cancelState'), 404);
+    file_put_contents("$dir/$id.json", json_encode($state)); raises(fn () => $store->update($id, $token, 'cancelState', '203.0.113.10'), 404);
     same(false, str_contains(file_get_contents("$dir/.ledger.json"), '203.0.113.10'));
 }));
 test('active job admission limit', fn () => temporary(function ($dir) {
     $store = new JobStore($dir); $s = (new ScanEngine(new FakeHttp()))->create('https://example.com/map.xml');
-    for ($i = 0; $i < 3; $i++) $store->create($s, "client-$i");
+    for ($i = 0; $i < 3; $i++) $store->create((new ScanEngine(new FakeHttp()))->create("https://site$i.com/map.xml"), "client-$i");
     raises(fn () => $store->create($s, 'fourth'), 429);
 }));
 test('per-IP hourly quota survives store restart', fn () => temporary(function ($dir) {
     $store = new JobStore($dir); $s = (new ScanEngine(new FakeHttp()))->create('https://example.com/map.xml');
-    for ($i = 0; $i < 5; $i++) { $c = $store->create($s, 'client'); $store->update($c['scan']['id'], $c['token'], 'cancelState'); }
+    for ($i = 0; $i < 5; $i++) { $c = $store->create((new ScanEngine(new FakeHttp()))->create("https://site$i.com/map.xml"), 'client'); $store->update($c['scan']['id'], $c['token'], 'cancelState', 'client'); }
     raises(fn () => (new JobStore($dir))->create($s, 'client'), 429);
 }));
 test('API validates origin, payloads and bearer token', fn () => temporary(function ($dir) {
@@ -124,9 +133,13 @@ test('API validates origin, payloads and bearer token', fn () => temporary(funct
     same(405, $api->handle('GET', 'create', [], '', 'client')[0]);
     same(403, $api->handle('POST', 'create', [], $body, 'client')[0]);
     same(415, $api->handle('POST', 'create', ['origin' => $headers['origin']], $body, 'client')[0]);
-    same(413, $api->handle('POST', 'create', $headers, str_repeat('x', 4097), 'client')[0]);
+    same(413, $api->handle('POST', 'create', $headers, str_repeat('x', 8193), 'client')[0]);
     same(400, $api->handle('POST', 'create', $headers, '{', 'client')[0]);
     same(422, $api->handle('POST', 'create', $headers, '{"sitemap":"http://127.0.0.1/"}', 'client')[0]);
+    same(403, $api->handle('POST', 'create', $headers, $body, 'client')[0]);
+    [$status, $issued] = $api->handle('POST', 'challenge', $headers, $body, 'client'); same(200, $status);
+    $proof = solveProof($issued['challenge']);
+    $body = json_encode(['sitemap' => 'https://example.com/map.xml', 'proof' => $proof]);
     [$status, $c] = $api->handle('POST', 'create', $headers, $body, 'client'); same(201, $status);
     $step = json_encode(['id' => $c['scan']['id']]);
     same(404, $api->handle('POST', 'step', $headers, $step, 'client')[0]);
@@ -157,5 +170,6 @@ test('cURL pins DNS, refuses redirects and bounds decoded bodies', function () {
         }
     } finally { proc_terminate($process); proc_close($process); }
 });
+require __DIR__ . '/hardening.php';
 echo "\n$passed passed, $failed failed\n";
 exit($failed > 0 ? 1 : 0);
